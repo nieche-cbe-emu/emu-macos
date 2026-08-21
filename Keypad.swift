@@ -10,7 +10,7 @@ struct PhoneKey: Identifiable, Hashable {
         .init(id: "lsk",   label: "左软键", defaultBits: [12]),
         .init(id: "rsk",   label: "右软键", defaultBits: [13]),
         .init(id: "call",  label: "呼叫",   defaultBits: [20]),
-        .init(id: "end",   label: "挂断",   defaultBits: [13]),
+        .init(id: "end",   label: "挂断",   defaultBits: []),
         .init(id: "up",    label: "▲",     defaultBits: [2, 17]),
         .init(id: "down",  label: "▼",     defaultBits: [8, 18]),
         .init(id: "left",  label: "◀",     defaultBits: [4, 15]),
@@ -126,8 +126,6 @@ struct KeypadView: View {
 
     @Binding var held: Set<String>
     var send: (Int) -> Void
-
-    var sendSoft: (String) -> Void = { _ in }
     @State private var showEditor = false
 
     private func key(_ id: String, wide: Bool = false) -> some View {
@@ -143,11 +141,7 @@ struct KeypadView: View {
 
             .gesture(DragGesture(minimumDistance: 0)
                 .onChanged { _ in
-                    if !held.contains(id) {
-                        held.insert(id); emit()
-                        if id == "lsk" { sendSoft("left") }
-                        if id == "rsk" { sendSoft("right") }
-                    }
+                    if !held.contains(id) { held.insert(id); emit() }
                 }
                 .onEnded { _ in
                     held.remove(id); emit()
