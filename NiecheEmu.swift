@@ -441,9 +441,11 @@ struct ContentView: View {
                     }
                 }
                 Divider()
-                KeypadView(map: keymap, held: $heldKeys) { mask in
+                KeypadView(map: keymap, held: $heldKeys, send: { mask in
                     engine.send(["keys": mask])
-                }
+                }, sendSoft: { side in
+                    engine.send(["soft": side])
+                })
                 Divider()
                 Text("模块日志").font(.caption).foregroundStyle(.secondary)
                 LogPane(engine: engine)
@@ -458,7 +460,13 @@ struct ContentView: View {
             guard let id = keymap.phoneKey(code: ev.keyCode) else { return ev }
 
             if ev.type == .keyDown && ev.isARepeat { return nil }
-            if ev.type == .keyDown { heldKeys.insert(id) } else { heldKeys.remove(id) }
+            if ev.type == .keyDown {
+                heldKeys.insert(id)
+                if id == "lsk" { engine.send(["soft": "left"]) }
+                if id == "rsk" { engine.send(["soft": "right"]) }
+            } else {
+                heldKeys.remove(id)
+            }
             engine.send(["keys": heldKeys.reduce(0) { $0 | keymap.mask($1) }])
             return nil
         }
@@ -487,6 +495,12 @@ struct NiecheEmuApp: App {
     static func findProjectDir() -> URL {
         if let e = ProcessInfo.processInfo.environment["NIECHE_DIR"] {
             return URL(fileURLWithPath: e)
+        }
+
+        if let bundled = Bundle.main.url(forResource: "engine", withExtension: nil),
+           FileManager.default.fileExists(
+               atPath: bundled.appendingPathComponent("tools/engine.py").path) {
+            return bundled
         }
         if let r = Bundle.main.url(forResource: "project_dir", withExtension: nil),
            let s = try? String(contentsOf: r, encoding: .utf8) {
