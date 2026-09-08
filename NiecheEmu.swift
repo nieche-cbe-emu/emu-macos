@@ -1,6 +1,9 @@
 
 import SwiftUI
 import AppKit
+
+let FPS_MIN = 1
+let FPS_MAX = 240
 import ImageIO
 import UniformTypeIdentifiers
 
@@ -373,6 +376,7 @@ struct ContentView: View {
     @State private var fitWindow = true
     @State private var manualScale: CGFloat = 2
     @State private var rotate = 0
+
     @State private var fpsTarget = 30
     @State private var upscale: UpscaleMode = .nearest
     @State private var soundOn = true
@@ -467,8 +471,23 @@ struct ContentView: View {
                     }
                     GridRow {
                         Text("帧率").font(.caption)
-                        Stepper("\(fpsTarget)", value: $fpsTarget, in: 5...120, step: 5)
-                            .onChange(of: fpsTarget) { v in engine.send(["fps": v]) }
+                        HStack(spacing: 6) {
+
+                            TextField("", value: $fpsTarget, format: .number)
+                                .textFieldStyle(.roundedBorder)
+                                .frame(width: 56)
+                                .multilineTextAlignment(.trailing)
+                            Stepper("", value: $fpsTarget, in: FPS_MIN...FPS_MAX)
+                                .labelsHidden()
+                            Text("实测 \(String(format: "%.1f", engine.fps))")
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
+                        .onChange(of: fpsTarget) { v in
+
+                            let c = min(max(v, FPS_MIN), FPS_MAX)
+                            if c != v { fpsTarget = c }
+                            engine.send(["fps": c])
+                        }
                     }
                 }
                 Divider()
