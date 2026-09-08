@@ -43,13 +43,41 @@ final class Engine: ObservableObject {
            let v = UpscaleMode(rawValue: m) { mode = v }
     }
 
+    private func engineCommand(module: URL, fps: Int) -> (URL, [String], String) {
+        if ProcessInfo.processInfo.environment["NIECHE_ENGINE"] != "python" {
+            var cands: [URL] = []
+            if let r = Bundle.main.resourceURL {
+                cands.append(r.appendingPathComponent("engine"))
+            }
+            cands.append(projectDir.appendingPathComponent("rust/target/release/engine"))
+            if let c = ProcessInfo.processInfo.environment["CARGO_TARGET_DIR"] {
+                cands.append(URL(fileURLWithPath: c).appendingPathComponent("release/engine"))
+            }
+            cands.append(URL(fileURLWithPath: NSHomeDirectory())
+                .appendingPathComponent(".cache/nieche-rust/release/engine"))
+            for c in cands {
+
+                var isDir: ObjCBool = false
+                guard FileManager.default.fileExists(atPath: c.path, isDirectory: &isDir),
+                      !isDir.boolValue,
+                      FileManager.default.isExecutableFile(atPath: c.path) else { continue }
+                return (c, [module.path, "--fps", String(fps)], "Rust")
+            }
+        }
+        return (URL(fileURLWithPath: "/usr/bin/env"),
+                ["python3", projectDir.appendingPathComponent("tools/engine.py").path,
+                 module.path, "--fps", String(fps)],
+                "Python")
+    }
+
     func start(module: URL, fps: Int = 30) {
         stop()
         let p = Process()
-        p.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-        p.arguments = ["python3", projectDir.appendingPathComponent("tools/engine.py").path,
-                       module.path, "--fps", String(fps)]
+        let (exe, argv, which) = engineCommand(module: module, fps: fps)
+        p.executableURL = exe
+        p.arguments = argv
         p.currentDirectoryURL = projectDir
+        append(log: "引擎：\(which)")
 
         var env = ProcessInfo.processInfo.environment
         env["NIECHE_HOME"] = GameLibrary.appHome.path
@@ -441,9 +469,11 @@ struct ContentView: View {
                     }
                 }
                 Divider()
-                KeypadView(map: keymap, held: $heldKeys) { mask in
+                KeypadView(map: keymap, held: $heldKeys, send: { mask in
                     engine.send(["keys": mask])
-                }
+                }, sendSoft: { side in
+                    engine.send(["soft": side])
+                })
                 Divider()
                 Text("模块日志").font(.caption).foregroundStyle(.secondary)
                 LogPane(engine: engine)
@@ -458,7 +488,12 @@ struct ContentView: View {
             guard let id = keymap.phoneKey(code: ev.keyCode) else { return ev }
 
             if ev.type == .keyDown && ev.isARepeat { return nil }
-            if ev.type == .keyDown { heldKeys.insert(id) } else { heldKeys.remove(id) }
+            if ev.type == .keyDown {
+                heldKeys.insert(id)
+                if id == "rsk" { engine.send(["soft": "right"]) }
+            } else {
+                heldKeys.remove(id)
+            }
             engine.send(["keys": heldKeys.reduce(0) { $0 | keymap.mask($1) }])
             return nil
         }
@@ -489,7 +524,7 @@ struct NiecheEmuApp: App {
             return URL(fileURLWithPath: e)
         }
 
-        if let bundled = Bundle.main.url(forResource: "engine", withExtension: nil),
+        if let bundled = Bundle.main.url(forResource: "pyengine", withExtension: nil),
            FileManager.default.fileExists(
                atPath: bundled.appendingPathComponent("tools/engine.py").path) {
             return bundled

@@ -1,5 +1,5 @@
 #!/bin/bash
-# 构建 NiecheEmu.app（无需完整 Xcode，Command Line Tools 的 swiftc 就够）
+
 set -e
 cd "$(dirname "$0")"
 APP="../NiecheEmu.app"
@@ -33,7 +33,14 @@ swiftc -O -parse-as-library \
 
 cp icons/NiecheEmu.icns "$APP/Contents/Resources/"
 
-# 把项目目录写进 app，运行时才知道去哪找 tools/engine.py
+ENGINE="${CARGO_TARGET_DIR:-$HOME/.cache/nieche-rust}/release/engine"
+if [ -x "$ENGINE" ]; then
+  cp "$ENGINE" "$APP/Contents/Resources/engine"
+  echo "已打包 Rust 引擎"
+else
+  echo "没找到 Rust 引擎（$ENGINE），app 会回落到 Python 引擎"
+fi
+
 PROJ="$(cd .. && pwd)"
 cat > "$APP/Contents/Resources/project_dir" <<EOF
 $PROJ

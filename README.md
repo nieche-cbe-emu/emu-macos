@@ -1,50 +1,28 @@
 # emu-macos
 
-尼彩 CBE 模拟器的 macOS 外壳（SwiftUI）。模拟核心是
-[emu-core](https://github.com/nieche-cbe-emu/emu-core) 的 Python 引擎子进程，
-两者用 stdin/stdout 上的二进制协议通信。
+尼彩 CBE 模拟器的 macOS 外壳（SwiftUI）。
+
+模拟核心跑在**独立子进程**里，和外壳用 stdin/stdout 上的二进制协议通信。
+引擎有两个实现，说的是同一套协议：
+
+- [emu-core](https://github.com/nieche-cbe-emu/emu-core) 的 Rust `engine`——默认，
+  单个可执行文件，不需要用户机器上有 Python
+- 同一仓库里 Python 的 `tools/engine.py`——参照实现，`NIECHE_ENGINE=python` 切回去
+
+找不到 Rust 引擎时会自动回落，并**在日志里说明用的是哪个**。
 
 ## 构建
 
 ```
-pip install unicorn capstone
-./build.sh
+./build.sh          # 出 NiecheEmu.app（到上一级目录）
+./package.sh        # 再打一个自带引擎的发布包 NiecheEmu-macos.zip
 ```
 
 需要 Xcode Command Line Tools（`swiftc` 即可，不用完整 Xcode）。
-生成的 `NiecheEmu.app` 在上一级目录。
+`build.sh` 会把 `emu-core` 构建出来的 Rust `engine` 打进 app；没有就跳过。
+`package.sh` 还会把 Python 回落引擎装进 `Resources/pyengine`，
+这样下载解压即可运行，不用 clone 仓库也不用 pip 装依赖。
 
-`build.sh` 会把项目目录写进 app 包，运行时据此找到 `tools/engine.py`，
-所以 emu-core 和 emu-tools 需要放在同级目录下。
+## 说明
 
-## 功能
-
-游戏库、镜像源下载、存档管理、功能机键盘布局、触屏常驻、
-键盘按键可自定义、Scale2x/Scale3x 放大、旋转、MIDI 音频。
-
-模拟器不自带游戏源，镜像源地址需要自己填。
-
-## 键位映射：尚未定论
-
-模拟器目前把 **bit12 当左软键、bit13 当右软键**，挂断键不映射任何位。
-
-依据来自孤岛的过场文本页：屏幕左下角画「加速」、右下角画「跳过」——软键标签的
-标准位置——按 bit13 触发的正是「跳过」，按 bit12/确定 触发「加速」；进游戏后
-底部左「菜单」右「商城」，bit12 打开的就是菜单。众神之战同样 bit12 开菜单。
-
-**但这不足以当作结论，右软键的行为对不上它自己的标签：**
-
-- 众神之战右下角画「任务」，按 bit13 弹的却是「是否退出游戏？」
-- 孤岛游戏内右下角画「商城」，按 bit13 弹的却是「确定要回到标题界面？」
-
-两个游戏都没有用右软键打开标签上写的那个功能。可能是这些标签本来就只吃触摸
-（众神之战的「任务」，32 个位逐个长按 40 帧都打不开，游戏也从不调用
-`Get_CurKeyDownState` 读原始键状态字），也可能是映射本身还不对。
-
-挂断键不映射任何位，同样只是推断：没有任何模块轮询过一个"挂断位"，
-真机上它由手机系统直接终止应用。
-
-固件里 `CurKeyDownState` 这个全局是间接寻址的，literal pool 里搜不到引用，
-所以还没能从固件侧读出手机键码到位的翻译表。这条线索还没走完。
-
-键位在模拟器里可以自己改。**欢迎带着实机对照的结果开 issue。**
+本仓库只有代码。游戏数据不在这里，也不会提供。
