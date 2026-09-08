@@ -43,37 +43,40 @@ final class Engine: ObservableObject {
            let v = UpscaleMode(rawValue: m) { mode = v }
     }
 
-    private func engineCommand(module: URL, fps: Int) -> (URL, [String], String) {
-        if ProcessInfo.processInfo.environment["NIECHE_ENGINE"] != "python" {
-            var cands: [URL] = []
-            if let r = Bundle.main.resourceURL {
-                cands.append(r.appendingPathComponent("engine"))
-            }
-            cands.append(projectDir.appendingPathComponent("rust/target/release/engine"))
-            if let c = ProcessInfo.processInfo.environment["CARGO_TARGET_DIR"] {
-                cands.append(URL(fileURLWithPath: c).appendingPathComponent("release/engine"))
-            }
-            cands.append(URL(fileURLWithPath: NSHomeDirectory())
-                .appendingPathComponent(".cache/nieche-rust/release/engine"))
-            for c in cands {
-
-                var isDir: ObjCBool = false
-                guard FileManager.default.fileExists(atPath: c.path, isDirectory: &isDir),
-                      !isDir.boolValue,
-                      FileManager.default.isExecutableFile(atPath: c.path) else { continue }
-                return (c, [module.path, "--fps", String(fps)], "Rust")
-            }
+    private func engineCommand(module: URL, fps: Int) -> (URL, [String], String)? {
+        #if DEV_PY
+        if let dev = devPythonEngine(projectDir: projectDir, module: module, fps: fps) {
+            return dev
         }
-        return (URL(fileURLWithPath: "/usr/bin/env"),
-                ["python3", projectDir.appendingPathComponent("tools/engine.py").path,
-                 module.path, "--fps", String(fps)],
-                "Python")
+        #endif
+        var cands: [URL] = []
+        if let r = Bundle.main.resourceURL {
+            cands.append(r.appendingPathComponent("engine"))
+        }
+        cands.append(projectDir.appendingPathComponent("rust/target/release/engine"))
+        if let c = ProcessInfo.processInfo.environment["CARGO_TARGET_DIR"] {
+            cands.append(URL(fileURLWithPath: c).appendingPathComponent("release/engine"))
+        }
+        cands.append(URL(fileURLWithPath: NSHomeDirectory())
+            .appendingPathComponent(".cache/nieche-rust/release/engine"))
+        for c in cands {
+
+            var isDir: ObjCBool = false
+            guard FileManager.default.fileExists(atPath: c.path, isDirectory: &isDir),
+                  !isDir.boolValue,
+                  FileManager.default.isExecutableFile(atPath: c.path) else { continue }
+            return (c, [module.path, "--fps", String(fps)], "Rust")
+        }
+        return nil
     }
 
     func start(module: URL, fps: Int = 30) {
         stop()
+        guard let (exe, argv, which) = engineCommand(module: module, fps: fps) else {
+            append(log: "找不到模拟核心（Resources/engine）。这个包坏了，请重新下载。")
+            return
+        }
         let p = Process()
-        let (exe, argv, which) = engineCommand(module: module, fps: fps)
         p.executableURL = exe
         p.arguments = argv
         p.currentDirectoryURL = projectDir

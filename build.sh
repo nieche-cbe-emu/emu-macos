@@ -24,11 +24,18 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 </dict></plist>
 PLIST
 
+DEV=""
+if [ -f DevPythonEngine.swift ]; then
+  DEV="-D DEV_PY DevPythonEngine.swift"
+  echo "带上 Python 引擎（本地开发验证用）"
+fi
+
 swiftc -O -parse-as-library \
   -target arm64-apple-macos13.0 \
   -sdk "$(xcrun --show-sdk-path)" \
   -framework SwiftUI -framework AppKit -framework AVFoundation \
   -o "$APP/Contents/MacOS/NiecheEmu" \
+  $DEV \
   NiecheEmu.swift Library.swift Upscale.swift Keypad.swift Sound.swift
 
 cp icons/NiecheEmu.icns "$APP/Contents/Resources/"
