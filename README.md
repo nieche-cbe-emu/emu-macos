@@ -13,6 +13,17 @@ CoolBar `.cbe` 模拟器的 macOS 外壳（SwiftUI）。窗口、绘制、键盘
 - 游戏库：记录用过的模块
 - 音频交由系统合成器播放（MIDI 走 `AVMIDIPlayer`）
 
+## 安装
+
+应用以 ad-hoc 方式签名，未使用 Developer ID，也未经 Apple 公证。首次打开时
+macOS 会拦下并提示无法验证开发者。解除隔离属性后即可打开：
+
+```bash
+xattr -dr com.apple.quarantine /Applications/NiecheEmu.app
+```
+
+也可在「系统设置 → 隐私与安全性」中对该应用点「仍要打开」。
+
 ## 环境要求
 
 - macOS 13.0 及以上，Apple Silicon

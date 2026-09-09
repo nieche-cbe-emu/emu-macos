@@ -14,6 +14,10 @@ echo "Rust 引擎：$(du -h "$APP/Contents/Resources/engine" | cut -f1)"
 rm -f "$APP/Contents/Resources/project_dir"
 rm -rf "$APP/Contents/Resources/pyengine"
 
+codesign --force --sign - "$APP/Contents/Resources/engine" >/dev/null 2>&1
+codesign --force --sign - "$APP"
+codesign --verify --strict --deep "$APP" && echo "签名校验通过"
+
 cd ..
 rm -f NiecheEmu-macos.zip
 ditto -c -k --sequesterRsrc --keepParent NiecheEmu.app NiecheEmu-macos.zip

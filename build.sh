@@ -48,8 +48,17 @@ else
   echo "没找到 Rust 引擎（$ENGINE），app 会回落到 Python 引擎"
 fi
 
+sign_app() {
+  [ -x "$APP/Contents/Resources/engine" ] &&     codesign --force --sign - "$APP/Contents/Resources/engine" >/dev/null 2>&1
+  codesign --force --sign - "$APP" >/dev/null 2>&1
+  codesign --verify --strict --deep "$APP" 2>&1 | sed 's/^/   /'
+}
+
 PROJ="$(cd .. && pwd)"
 cat > "$APP/Contents/Resources/project_dir" <<EOF
 $PROJ
 EOF
 echo "已构建 $APP"
+
+sign_app
+echo "已签名（ad-hoc）"
