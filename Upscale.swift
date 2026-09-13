@@ -2,6 +2,7 @@
 import Foundation
 
 enum UpscaleMode: String, CaseIterable, Identifiable {
+    case sharp   = "锐利"
     case nearest = "像素"
     case smooth  = "平滑"
     case scale2x = "Scale2x"
@@ -16,7 +17,9 @@ enum UpscaleMode: String, CaseIterable, Identifiable {
         }
     }
 
-    var interpolate: Bool { self == .smooth }
+    var interpolate: Bool { self == .smooth || self == .sharp }
+
+    var integerFit: Bool { self != .smooth && self != .sharp }
 }
 
 enum Upscale {
@@ -91,9 +94,32 @@ enum Upscale {
         }
     }
 
+    static func replicate(_ src: [UInt32], _ w: Int, _ h: Int, _ n: Int, _ dst: inout [UInt32]) {
+        let dw = w * n
+        if dst.count != dw * h * n { dst = [UInt32](repeating: 0, count: dw * h * n) }
+        src.withUnsafeBufferPointer { s in
+            dst.withUnsafeMutableBufferPointer { d in
+                for y in 0..<h {
+                    let row = y * n * dw
+                    for x in 0..<w {
+                        let p = s[y * w + x]
+                        let o = row + x * n
+                        for k in 0..<n { d[o + k] = p }
+                    }
+
+                    for k in 1..<max(n, 1) {
+                        (d.baseAddress! + row + k * dw).update(from: d.baseAddress! + row, count: dw)
+                    }
+                }
+            }
+        }
+    }
+
     static func apply(_ mode: UpscaleMode, _ px: [UInt32], _ w: Int, _ h: Int,
-                      into buf: inout [UInt32]) -> (Bool, Int, Int) {
+                      factor: Int = 1, into buf: inout [UInt32]) -> (Bool, Int, Int) {
         switch mode {
+        case .sharp where factor > 1:
+            replicate(px, w, h, factor, &buf); return (true, w * factor, h * factor)
         case .scale2x: scale2x(px, w, h, &buf); return (true, w * 2, h * 2)
         case .scale3x: scale3x(px, w, h, &buf); return (true, w * 3, h * 3)
         default:       return (false, w, h)
