@@ -31,9 +31,7 @@ final class Engine: ObservableObject {
 
     let audio = AudioOut()
 
-    var mode: UpscaleMode = .sharp
-
-    var sharpFactor = 1
+    var mode: UpscaleMode = .nearest
     private var lastTick = CFAbsoluteTimeGetCurrent()
     private var framesSinceTick = 0
     private var gw = 240, gh = 400
@@ -236,7 +234,7 @@ final class Engine: ObservableObject {
                 }
             }
         }
-        let (scaled, ow, oh) = Upscale.apply(mode, px32, w, h, factor: sharpFactor, into: &upBuf)
+        let (scaled, ow, oh) = Upscale.apply(mode, px32, w, h, into: &upBuf)
         let out = scaled ? upBuf : px32
         defer { Self.snapshotIfRequested(out, ow, oh, no) }
         let bytes = out.withUnsafeBufferPointer { (b: UnsafeBufferPointer<UInt32>) -> Data in
@@ -315,7 +313,7 @@ struct ScreenView: View {
     @ObservedObject var engine: Engine
     var scale: CGFloat
     var rotate: Int
-    var mode: UpscaleMode
+    var smooth: Bool
     @State private var touching = false
 
     var body: some View {
@@ -326,9 +324,7 @@ struct ScreenView: View {
             if let img = engine.image {
 
                 Image(img, scale: 1, label: Text("屏幕"))
-
-                    .interpolation(mode == .smooth ? .high
-                                   : mode == .sharp && engine.sharpFactor > 1 ? .low : .none)
+                    .interpolation(smooth ? .high : .none)
                     .resizable()
                     .frame(width: w, height: h)
                     .rotationEffect(.degrees(Double(rotate)))
@@ -382,7 +378,7 @@ struct ContentView: View {
     @State private var rotate = 0
 
     @State private var fpsTarget = 30
-    @State private var upscale: UpscaleMode = .sharp
+    @State private var upscale: UpscaleMode = .nearest
     @State private var soundOn = true
     @State private var volume: Double = 0.7
     @State private var monitor: Any?
@@ -604,19 +600,15 @@ struct ScreenColumn: View {
             let turned = rotate % 180 != 0
             let gw = CGFloat(max(engine.width, 1)), gh = CGFloat(max(engine.height, 1))
             let needW = turned ? gh : gw, needH = turned ? gw : gh
-            let fit = min(geo.size.width / needW, (geo.size.height - 26) / needH)
-            let fitScale = max(1, upscale.integerFit ? floor(fit) : fit)
+            let fitScale = max(1, min(floor(geo.size.width / needW),
+                                      floor((geo.size.height - 26) / needH)))
             let s = fitWindow ? fitScale : manualScale
-            let backing = NSScreen.main?.backingScaleFactor ?? 2
-            let dev = s * backing
             VStack(spacing: 6) {
                 Spacer(minLength: 0)
-                ScreenView(engine: engine, scale: s, rotate: rotate, mode: upscale)
-                    .onAppear { engine.sharpFactor = Self.factor(dev) }
-                    .onChange(of: dev) { v in engine.sharpFactor = Self.factor(v) }
-                Text(verbatim: String(format: "帧 %d · %.1f fps · %@×%@",
-                                      engine.frame, engine.fps,
-                                      s == s.rounded() ? "\(Int(s))" : String(format: "%.2f", s),
+                ScreenView(engine: engine, scale: s, rotate: rotate,
+                           smooth: upscale.interpolate)
+                Text(verbatim: String(format: "帧 %d · %.1f fps · %d×%@",
+                                      engine.frame, engine.fps, Int(s),
                                       upscale == .nearest ? "" : " · " + upscale.rawValue))
                     .font(.caption).foregroundStyle(.secondary)
                 Spacer(minLength: 0)
@@ -624,11 +616,6 @@ struct ScreenColumn: View {
             .frame(width: geo.size.width, height: geo.size.height)
         }
         .frame(minWidth: 250)
-    }
-
-    static func factor(_ dev: CGFloat) -> Int {
-        if abs(dev - dev.rounded()) < 0.01 { return 1 }
-        return min(4, max(1, Int(ceil(dev))))
     }
 }
 
