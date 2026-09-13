@@ -471,22 +471,10 @@ struct ContentView: View {
                     }
                     GridRow {
                         Text("帧率").font(.caption)
-                        HStack(spacing: 6) {
-
-                            TextField("", value: $fpsTarget, format: .number)
-                                .textFieldStyle(.roundedBorder)
-                                .frame(width: 56)
-                                .multilineTextAlignment(.trailing)
-                            Stepper("", value: $fpsTarget, in: FPS_MIN...FPS_MAX)
-                                .labelsHidden()
+                        HStack(spacing: 8) {
+                            Button("\(fpsTarget) fps") { askFps() }
                             Text("实测 \(String(format: "%.1f", engine.fps))")
                                 .font(.caption).foregroundStyle(.secondary)
-                        }
-                        .onChange(of: fpsTarget) { v in
-
-                            let c = min(max(v, FPS_MIN), FPS_MAX)
-                            if c != v { fpsTarget = c }
-                            engine.send(["fps": c])
                         }
                     }
                 }
@@ -507,6 +495,9 @@ struct ContentView: View {
 
     private func installKeyMonitor() {
         monitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .keyUp]) { ev in
+
+            if let r = NSApp.keyWindow?.firstResponder,
+               r is NSTextView || r is NSTextField { return ev }
             guard let id = keymap.phoneKey(code: ev.keyCode) else { return ev }
 
             if ev.type == .keyDown && ev.isARepeat { return nil }
@@ -519,6 +510,25 @@ struct ContentView: View {
             engine.send(["keys": heldKeys.reduce(0) { $0 | keymap.mask($1) }])
             return nil
         }
+    }
+
+    private func askFps() {
+        let a = NSAlert()
+        a.messageText = "帧率"
+        a.informativeText = "这就是游戏速度：模块按帧推进，跑多快游戏就多快。\n"
+            + "真机上这些游戏大概只有 10-15fps。范围 \(FPS_MIN)-\(FPS_MAX)。"
+        let tf = NSTextField(frame: NSRect(x: 0, y: 0, width: 80, height: 24))
+        tf.stringValue = String(fpsTarget)
+        tf.alignment = .right
+        a.accessoryView = tf
+        a.addButton(withTitle: "好")
+        a.addButton(withTitle: "取消")
+        a.window.initialFirstResponder = tf
+        guard a.runModal() == .alertFirstButtonReturn else { return }
+
+        let v = Int(tf.stringValue.trimmingCharacters(in: .whitespaces)) ?? fpsTarget
+        fpsTarget = min(max(v, FPS_MIN), FPS_MAX)
+        engine.send(["fps": fpsTarget])
     }
 
     private func pick() {

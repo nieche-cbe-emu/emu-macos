@@ -30,13 +30,30 @@ if [ -f DevPythonEngine.swift ]; then
   echo "带上 Python 引擎（本地开发验证用）"
 fi
 
-swiftc -O -parse-as-library \
-  -target arm64-apple-macos13.0 \
-  -sdk "$(xcrun --show-sdk-path)" \
-  -framework SwiftUI -framework AppKit -framework AVFoundation \
-  -o "$APP/Contents/MacOS/NiecheEmu" \
-  $DEV \
-  NiecheEmu.swift Library.swift Upscale.swift Keypad.swift Sound.swift
+SDKS="$(xcrun --show-sdk-path 2>/dev/null)"
+for d in $(ls -d /Library/Developer/CommandLineTools/SDKs/MacOSX[0-9]*.sdk 2>/dev/null | sort -rV); do
+  SDKS="$SDKS $d"
+done
+BUILT=""
+for SDK in $SDKS; do
+  [ -d "$SDK" ] || continue
+  if swiftc -O -parse-as-library \
+       -target arm64-apple-macos13.0 \
+       -sdk "$SDK" \
+       -framework SwiftUI -framework AppKit -framework AVFoundation \
+       -o "$APP/Contents/MacOS/NiecheEmu" \
+       $DEV \
+       NiecheEmu.swift Library.swift Upscale.swift Keypad.swift Sound.swift 2>/tmp/nieche-swiftc.log; then
+    BUILT="$SDK"
+    break
+  fi
+done
+if [ -z "$BUILT" ]; then
+  echo "!! 所有可用 SDK 都编不过，最后一次的错误："
+  tail -20 /tmp/nieche-swiftc.log
+  exit 1
+fi
+echo "SDK：$(basename "$BUILT")"
 
 cp icons/NiecheEmu.icns "$APP/Contents/Resources/"
 
