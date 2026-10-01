@@ -60,3 +60,8 @@ xattr -dr com.apple.quarantine /Applications/NiecheEmu.app
 ## 说明
 
 本仓库只包含代码。游戏数据不在此处，也不提供。
+
+## 许可证
+
+GPL-2.0，见 LICENSE。发布包里带着模拟核心（链接 unicorn，GPL-2.0）。
+第三方组件逐项见 THIRD-PARTY.md。
