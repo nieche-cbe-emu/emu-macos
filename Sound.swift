@@ -6,6 +6,7 @@ final class AudioOut {
     private var midi: AVMIDIPlayer?
     private var sample: AVAudioPlayer?
     private var loopTimer: Timer?
+    private var curPath: String?
     private(set) var now = ""
 
     var enabled = true { didSet { if !enabled { stop() } } }
@@ -22,14 +23,23 @@ final class AudioOut {
                  loop: event["loop"] as? Bool ?? false,
                  name: event["name"] as? String ?? "")
         case "stop":
-            stop()
+            silence()
         default:
             break
         }
     }
 
     private func play(_ url: URL, loop: Bool, name: String) {
+
+        if curPath == url.path, let p = sample {
+            p.numberOfLoops = loop ? -1 : 0
+            p.currentTime = 0
+            p.play()
+            now = name
+            return
+        }
         stop()
+        curPath = url.path
         now = name
         let ext = url.pathExtension.lowercased()
         if ext == "mid" || ext == "midi" {
@@ -51,10 +61,21 @@ final class AudioOut {
         }
     }
 
+    func silence() {
+        if let p = sample {
+            p.pause()
+            p.currentTime = 0
+            now = ""
+            return
+        }
+        stop()
+    }
+
     func stop() {
         midi?.stop(); midi = nil
         sample?.stop(); sample = nil
         loopTimer?.invalidate(); loopTimer = nil
+        curPath = nil
         now = ""
     }
 }
