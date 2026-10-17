@@ -104,11 +104,20 @@ final class GameLibrary: ObservableObject {
     }
 
     func has(file: String) -> Bool {
-        FileManager.default.fileExists(atPath: root.appendingPathComponent(file).path)
+        guard let name = MirrorSafety.localName(file) else { return false }
+        return FileManager.default.fileExists(atPath: root.appendingPathComponent(name).path)
     }
 
     func write(_ data: Data, as file: String) throws -> URL {
-        let dst = root.appendingPathComponent(file)
+        guard let name = MirrorSafety.localName(file) else {
+            throw NSError(domain: "library", code: 1,
+                          userInfo: [NSLocalizedDescriptionKey: "文件名不合法：\(file)"])
+        }
+        let dst = root.appendingPathComponent(name)
+        guard MirrorSafety.isInside(dst, root: root) else {
+            throw NSError(domain: "library", code: 2,
+                          userInfo: [NSLocalizedDescriptionKey: "目标不在游戏库里：\(file)"])
+        }
         try data.write(to: dst, options: .atomic)
         reload()
         return dst
@@ -145,6 +154,8 @@ final class CatalogClient: ObservableObject {
 
     private var base: URL?
 
+    private var indexURL: URL?
+
     static func normalize(_ s: String) -> String {
         let t = s.trimmingCharacters(in: .whitespacesAndNewlines)
         if t.isEmpty || t.hasPrefix("http://") || t.hasPrefix("https://") { return t }
@@ -165,8 +176,10 @@ final class CatalogClient: ObservableObject {
         }
         busy = true; status = "正在拉取目录…"
         defer { busy = false }
+        indexURL = url
         do {
-            let (data, resp) = try await URLSession.shared.data(for: authed(url))
+            let (data, resp) = try await URLSession.shared.data(
+                for: authed(url), delegate: StripAuthOnRedirect())
             if let http = resp as? HTTPURLResponse, http.statusCode != 200 {
                 status = http.statusCode == 404 && token.isEmpty
                     ? "拉取失败：HTTP 404（私有仓库要先填令牌）"
@@ -184,7 +197,9 @@ final class CatalogClient: ObservableObject {
         var r = URLRequest(url: url)
         r.cachePolicy = .reloadIgnoringLocalCacheData
         let t = token.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !t.isEmpty { r.setValue("Bearer \(t)", forHTTPHeaderField: "Authorization") }
+        if !t.isEmpty && MirrorSafety.mayAttachToken(to: url, indexURL: indexURL) {
+            r.setValue("Bearer \(t)", forHTTPHeaderField: "Authorization")
+        }
         return r
     }
 
@@ -223,10 +238,15 @@ final class CatalogClient: ObservableObject {
             status = "地址拼不出来：\(e.file)"
             return
         }
+        guard let local = MirrorSafety.localName(e.file) else {
+            status = "\(e.title) 的文件名不合法，没有下载"
+            return
+        }
         downloading = e.file; progress = 0
         defer { downloading = nil }
         do {
-            let (data, resp) = try await URLSession.shared.data(for: authed(url))
+            let (data, resp) = try await URLSession.shared.data(
+                for: authed(url), delegate: StripAuthOnRedirect())
             if let http = resp as? HTTPURLResponse, http.statusCode != 200 {
                 status = "\(e.title) 下载失败：HTTP \(http.statusCode)"
                 return
@@ -238,7 +258,7 @@ final class CatalogClient: ObservableObject {
                     return
                 }
             }
-            _ = try lib.write(data, as: e.file)
+            _ = try lib.write(data, as: local)
             status = "已下载 \(e.title)"
         } catch {
             status = "\(e.title) 下载失败：\(error.localizedDescription)"

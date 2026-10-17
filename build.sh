@@ -43,7 +43,7 @@ for SDK in $SDKS; do
        -framework SwiftUI -framework AppKit -framework AVFoundation \
        -o "$APP/Contents/MacOS/NiecheEmu" \
        $DEV \
-       NiecheEmu.swift Library.swift Upscale.swift Keypad.swift Sound.swift 2>/tmp/nieche-swiftc.log; then
+       NiecheEmu.swift Library.swift MirrorSafety.swift Upscale.swift Keypad.swift Sound.swift 2>/tmp/nieche-swiftc.log; then
     BUILT="$SDK"
     break
   fi
